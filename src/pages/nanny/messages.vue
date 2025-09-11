@@ -152,14 +152,36 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Typing Indicator -->
+                <div v-if="messageStore.typingUsers.size > 0" class="mb-4">
+                  <div class="flex">
+                    <div class="bg-gray-100 text-gray-800 rounded-lg px-4 py-2">
+                      <div class="flex space-x-1">
+                        <div
+                          class="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        ></div>
+                        <div
+                          class="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                          style="animation-delay: 0.2s"
+                        ></div>
+                        <div
+                          class="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                          style="animation-delay: 0.4s"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Message Input -->
               <div class="p-4 border-t border-gray-200 mb-4">
-                <form @submit.prevent="sendMessage" class="flex space-x-2">
+                <form @submit.prevent="submitMessage" class="flex space-x-2">
                   <input
                     type="text"
                     v-model="newMessage"
+                    @input="handleTyping"
                     placeholder="Type a message..."
                     class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-pink-500"
                   />
@@ -223,17 +245,37 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { useMessageStore } from "@/stores/message";
+import { useSocket } from "@/composables/useSocket";
+import { useAuthStore } from "@/stores/auth";
 
 // State
 const searchQuery = ref("");
 const newMessage = ref("");
 const selectedConversation = ref(null);
 const messageStore = useMessageStore();
+const authStore = useAuthStore();
+const {
+  socket,
+  isConnected,
+  onlineUsers,
+  typingUsers,
+  joinRoom,
+  leaveRoom,
+  sendMessage,
+  sendTypingIndicator,
+  markMessagesAsRead,
+  getUserStatus,
+} = useSocket();
+
 const conversations = computed(() => {
-  return messageStore.chats
-})
+  return messageStore.chats;
+});
+
+// Typing indicator state
+const isTyping = ref(false);
+const typingTimeout = ref(null);
 const converations = ref([
   {
     id: 1,
@@ -359,32 +401,78 @@ const filteredConversations = computed(() => {
 
 // Methods
 function selectConversation(conversation) {
+  // Leave previous room if exists
+  if (selectedConversation.value) {
+    leaveRoom(selectedConversation.value.id);
+  }
+
   selectedConversation.value = conversation;
+  messageStore.setCurrentRoom(conversation.id);
+
   if (conversation.unread) {
     conversation.unread = false;
+    // Mark messages as read
+    const unreadMessages = conversation.messages.filter((msg) => !msg.readBy);
+    if (unreadMessages.length > 0) {
+      markMessagesAsRead(
+        conversation.id,
+        unreadMessages.map((msg) => msg.id)
+      );
+    }
   }
+
+  // Join new room
+  joinRoom(conversation.id);
+
+  // Get user status
+  const otherUserId = conversation.parent?.id || conversation.nanny?.id;
+  if (otherUserId) {
+    getUserStatus(otherUserId);
+  }
+
   nextTick(() => {
     scrollToBottom();
   });
 }
 
-function sendMessage() {
+function submitMessage() {
   if (!newMessage.value.trim() || !selectedConversation.value) return;
 
-  const message = {
-    sender: "nanny",
-    text: newMessage.value,
-    time: new Date(),
-  };
+  const messageText = newMessage.value.trim();
 
-  selectedConversation.value.messages.push(message);
-  selectedConversation.value.lastMessage = newMessage.value;
-  selectedConversation.value.lastMessageTime = new Date();
+  // Send via Socket.IO
+  sendMessage(selectedConversation.value.id, messageText);
+
+  // Stop typing indicator
+  sendTypingIndicator(selectedConversation.value.id, false);
+  isTyping.value = false;
+
+  // Clear input
   newMessage.value = "";
 
   nextTick(() => {
     scrollToBottom();
   });
+}
+
+// Handle typing indicator
+function handleTyping() {
+  if (!selectedConversation.value) return;
+
+  // Send typing indicator
+  sendTypingIndicator(selectedConversation.value.id, true);
+  isTyping.value = true;
+
+  // Clear existing timeout
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value);
+  }
+
+  // Set timeout to stop typing indicator
+  typingTimeout.value = setTimeout(() => {
+    sendTypingIndicator(selectedConversation.value.id, false);
+    isTyping.value = false;
+  }, 1000);
 }
 
 // For template ref
@@ -444,11 +532,53 @@ function formatTime(date) {
   });
 }
 
+// Socket event handlers
+function setupSocketListeners() {
+  socket.on("message-received", (message) => {
+    messageStore.addMessage(message);
+    nextTick(() => {
+      scrollToBottom();
+    });
+  });
+
+  socket.on("user-status", (data) => {
+    messageStore.updateUserStatus(data.userId, data.isOnline, data.lastSeen);
+  });
+
+  socket.on("typing", (data) => {
+    messageStore.setTypingUser(data.userId, data.userType, data.isTyping);
+  });
+
+  socket.on("message-read", (data) => {
+    messageStore.updateMessageReadStatus(data.messageIds, data.readBy);
+  });
+}
+
 // Lifecycle
 onMounted(async () => {
   await messageStore.fetchChats();
+  setupSocketListeners();
+
   if (conversations.value.length > 0) {
     selectConversation(conversations.value[0]);
   }
+});
+
+onUnmounted(() => {
+  // Leave current room
+  if (selectedConversation.value) {
+    leaveRoom(selectedConversation.value.id);
+  }
+
+  // Clear typing timeout
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value);
+  }
+
+  // Remove socket listeners
+  socket.off("message-received");
+  socket.off("user-status");
+  socket.off("typing");
+  socket.off("message-read");
 });
 </script>
