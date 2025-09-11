@@ -453,7 +453,7 @@ export default {
       nannies: [
         {
           id: 1,
-          name: "Emma Johnson",
+          name: "Emma Njeri",
           title: "Experienced Childcare Professional",
           avatar: "https://randomuser.me/api/portraits/women/32.jpg",
           rating: 4.9,
@@ -475,7 +475,7 @@ export default {
         },
         {
           id: 2,
-          name: "Sophia Martinez",
+          name: "Sophia Muthoni",
           title: "Nurturing Nanny & Former Teacher",
           avatar: "https://randomuser.me/api/portraits/women/44.jpg",
           rating: 4.7,
@@ -497,7 +497,7 @@ export default {
         },
         {
           id: 3,
-          name: "Michael Wilson",
+          name: "Michael Njiru",
           title: "Energetic & Reliable Caregiver",
           avatar: "https://randomuser.me/api/portraits/men/32.jpg",
           rating: 4.8,
@@ -519,7 +519,7 @@ export default {
         },
         {
           id: 4,
-          name: "Olivia Taylor",
+          name: "Olivia Wambui",
           title: "Gentle Infant & Toddler Specialist",
           avatar: "https://randomuser.me/api/portraits/women/67.jpg",
           rating: 5.0,
@@ -541,7 +541,7 @@ export default {
         },
         {
           id: 5,
-          name: "James Brown",
+          name: "James Mwangi",
           title: "Fun & Educational After-School Nanny",
           avatar: "https://randomuser.me/api/portraits/men/55.jpg",
           rating: 4.6,

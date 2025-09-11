@@ -47,8 +47,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiUrl: process.env.API_URL || "http://localhost:3000/api",
+      socketUrl: process.env.SOCKET_URL || "http://localhost:3333",
+      },
     },
-  },
-  ssr: false,
-  compatibilityDate: "2024-11-21",
+    ssr: false,
+    compatibilityDate: "2024-11-21",
 });

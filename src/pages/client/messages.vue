@@ -68,7 +68,9 @@
                         {{ conversation.name }}
                       </h3>
                       <span class="text-xs text-gray-500">{{
-                        formatTime(conversation.lastMessageTime)
+                        conversation.lastMessageTime
+                          ? formatTime(conversation.lastMessageTime)
+                          : ""
                       }}</span>
                     </div>
                     <p class="text-sm text-gray-500 truncate">
@@ -83,7 +85,6 @@
               </div>
             </div>
           </div>
-
           <!-- Chat Area -->
           <div class="flex-1 flex flex-col">
             <div v-if="selectedConversation" class="flex-1 flex flex-col">
@@ -190,7 +191,8 @@
                     </div>
                   </div>
                 </div>
-                <div v-if="isTyping" class="flex mb-4">
+                <!-- Typing Indicator -->
+                <div v-if="messageStore.typingUsers.size > 0" class="flex mb-4">
                   <div
                     class="bg-gray-100 text-gray-800 rounded-lg rounded-bl-none px-4 py-2"
                   >
@@ -235,7 +237,8 @@
                   <div class="flex-1 relative">
                     <textarea
                       v-model="newMessage"
-                      @keydown.enter.prevent="sendMessage"
+                      @keydown.enter.prevent="submitMessage"
+                      @input="handleTyping"
                       placeholder="Type a message..."
                       class="w-full border border-gray-300 rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-pink focus:border-pink resize-none"
                       rows="1"
@@ -260,7 +263,7 @@
                     </button>
                   </div>
                   <button
-                    @click="sendMessage"
+                    @click="submitMessage"
                     :disabled="!newMessage.trim()"
                     class="p-2 rounded-full bg-pink text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -288,6 +291,7 @@
               v-if="!selectedConversation"
               class="flex-1 flex items-center justify-center bg-gray-50"
             >
+            {{  console.log(selectedConversation) }}
               <div class="text-center p-6">
                 <div
                   class="mx-auto w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center"
@@ -322,298 +326,437 @@
   </NuxtLayout>
 </template>
 
-<script>
-export default {
-  data() {
-    return {
-      searchQuery: "",
-      selectedConversation: null,
-      newMessage: "",
-      isTyping: false,
-      conversations: [
-        {
-          id: 1,
-          name: "Emma Johnson",
-          avatar: "https://randomuser.me/api/portraits/women/32.jpg",
-          lastMessage: "I'm available this weekend if you still need a sitter!",
-          lastMessageTime: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-          unread: true,
-          online: true,
-          lastSeen: null,
-          messages: [
-            {
-              sender: "nanny",
-              text: "Hi there! I saw your job posting for a weekend babysitter. I'd love to help out!",
-              time: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-            },
-            {
-              sender: "client",
-              text: "Hi Emma! Thanks for reaching out. We're looking for someone this Saturday from 6-10pm. Would you be available?",
-              time: new Date(Date.now() - 23 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "Yes, I'm free on Saturday evening. I'd be happy to help out with your children. How old are they?",
-              time: new Date(Date.now() - 22 * 60 * 60 * 1000),
-            },
-            {
-              sender: "client",
-              text: "Great! We have two kids - Emma is 5 and Noah is 3. They're pretty easy-going and usually in bed by 8pm.",
-              time: new Date(Date.now() - 20 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "I'm available this weekend if you still need a sitter!",
-              time: new Date(Date.now() - 15 * 60 * 1000),
-            },
-          ],
-        },
-        {
-          id: 2,
-          name: "Sophia Martinez",
-          avatar: "https://randomuser.me/api/portraits/women/44.jpg",
-          lastMessage:
-            "The kids had a great time today! We made cookies and finished the science project.",
-          lastMessageTime: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
-          unread: false,
-          online: false,
-          lastSeen: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-          messages: [
-            {
-              sender: "nanny",
-              text: "Good morning! Just confirming our appointment for today at 2pm.",
-              time: new Date(Date.now() - 8 * 60 * 60 * 1000),
-            },
-            {
-              sender: "client",
-              text: "Good morning Sophia! Yes, 2pm works perfectly. The kids are excited to see you again.",
-              time: new Date(Date.now() - 7.5 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "Great! I've planned some fun activities for them. See you soon!",
-              time: new Date(Date.now() - 7 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "The kids had a great time today! We made cookies and finished the science project.",
-              time: new Date(Date.now() - 3 * 60 * 60 * 1000),
-            },
-          ],
-        },
-        {
-          id: 3,
-          name: "Michael Wilson",
-          avatar: "https://randomuser.me/api/portraits/men/32.jpg",
-          lastMessage: "I can start next Monday. Would 9am work for you?",
-          lastMessageTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-          unread: false,
-          online: true,
-          lastSeen: null,
-          messages: [
-            {
-              sender: "client",
-              text: "Hi Michael, I'm interested in hiring you for regular weekday care for my son. Are you available for full-time work?",
-              time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "Hello! Yes, I'm currently looking for a full-time position. I'd be happy to discuss details about your needs.",
-              time: new Date(Date.now() - 2.5 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "client",
-              text: "Great! We need someone Monday through Friday, 9am-5pm. When would you be able to start?",
-              time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "I can start next Monday. Would 9am work for you?",
-              time: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-            },
-          ],
-        },
-        {
-          id: 4,
-          name: "Olivia Taylor",
-          avatar: "https://randomuser.me/api/portraits/women/67.jpg",
-          lastMessage:
-            "Thank you for the opportunity, but I've accepted another position. Best of luck finding a great nanny!",
-          lastMessageTime: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-          unread: false,
-          online: false,
-          lastSeen: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-          messages: [
-            {
-              sender: "client",
-              text: "Hi Olivia, I saw your profile and I'm impressed with your experience with infants. We have a 6-month-old and are looking for part-time help.",
-              time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "Thank you for reaching out! I love working with infants. Could you tell me more about the schedule you're looking for?",
-              time: new Date(Date.now() - 6.5 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "client",
-              text: "We're looking for help on Tuesdays and Thursdays, from 10am to 4pm. Would that work with your schedule?",
-              time: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-            },
-            {
-              sender: "nanny",
-              text: "Thank you for the opportunity, but I've accepted another position. Best of luck finding a great nanny!",
-              time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-            },
-          ],
-        },
-      ],
-    };
+<script setup>
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
+import { useSocket } from "@/composables/useSocket";
+import { useMessageStore } from "@/stores/message";
+import { useAuthStore } from "@/stores/auth";
+
+// Stores and composables
+const messageStore = useMessageStore();
+const authStore = useAuthStore();
+const {
+  socket,
+  isConnected,
+  onlineUsers,
+  typingUsers,
+  joinRoom,
+  leaveRoom,
+  sendMessage: sendSocketMessage,
+  sendTypingIndicator,
+  markMessagesAsRead,
+  getUserStatus,
+} = useSocket();
+
+// State
+const searchQuery = ref("");
+const selectedConversation = ref(null);
+const newMessage = ref("");
+const isTyping = ref(false);
+const typingTimeout = ref(null);
+
+// Debug: Watch selectedConversation changes
+watch(
+  selectedConversation,
+  (newVal) => {
+    console.log("selectedConversation changed to:", newVal);
   },
-  computed: {
-    filteredConversations() {
-      if (!this.searchQuery) return this.conversations;
+  { deep: true }
+);
 
-      const query = this.searchQuery.toLowerCase();
-      return this.conversations.filter(
-        (conversation) =>
-          conversation.name.toLowerCase().includes(query) ||
-          conversation.lastMessage.toLowerCase().includes(query)
-      );
-    },
-  },
-  methods: {
-    selectConversation(conversation) {
-      this.selectedConversation = conversation;
+// Use conversations from message store
+const conversations = computed(() => {
+  return messageStore.chats;
+});
 
-      // Mark as read when selected
-      if (conversation.unread) {
-        conversation.unread = false;
-      }
-
-      // Scroll to bottom of messages
-      this.$nextTick(() => {
-        this.scrollToBottom();
-      });
-    },
-    sendMessage() {
-      if (!this.newMessage.trim() || !this.selectedConversation) return;
-
-      // Add message to conversation
-      this.selectedConversation.messages.push({
+// Mock conversations data (fallback if store is empty)
+const mockConversations = ref([
+  {
+    id: 1,
+    name: "Emma Johnson",
+    avatar: "https://randomuser.me/api/portraits/women/32.jpg",
+    lastMessage: "I'm available this weekend if you still need a sitter!",
+    lastMessageTime: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
+    unread: true,
+    online: true,
+    lastSeen: null,
+    messages: [
+      {
+        sender: "nanny",
+        text: "Hi there! I saw your job posting for a weekend babysitter. I'd love to help out!",
+        time: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+      },
+      {
         sender: "client",
-        text: this.newMessage,
-        time: new Date(),
-      });
-
-      // Update last message
-      this.selectedConversation.lastMessage = this.newMessage;
-      this.selectedConversation.lastMessageTime = new Date();
-
-      // Clear input
-      this.newMessage = "";
-
-      // Scroll to bottom
-      this.$nextTick(() => {
-        this.scrollToBottom();
-      });
-
-      // Simulate nanny typing and response
-      this.simulateResponse();
-    },
-    simulateResponse() {
-      // Show typing indicator
-      this.isTyping = true;
-
-      // Random response time between 1-3 seconds
-      const responseTime = Math.floor(Math.random() * 2000) + 1000;
-
-      setTimeout(() => {
-        this.isTyping = false;
-
-        // Only respond if conversation is still selected
-        if (this.selectedConversation) {
-          const responses = [
-            "That sounds great!",
-            "I'll be available then.",
-            "Perfect, looking forward to it!",
-            "I can definitely help with that.",
-            "Let me check my schedule and get back to you soon.",
-          ];
-
-          const randomResponse =
-            responses[Math.floor(Math.random() * responses.length)];
-
-          // Add response
-          this.selectedConversation.messages.push({
-            sender: "nanny",
-            text: randomResponse,
-            time: new Date(),
-          });
-
-          // Update last message
-          this.selectedConversation.lastMessage = randomResponse;
-          this.selectedConversation.lastMessageTime = new Date();
-
-          // Scroll to bottom
-          this.$nextTick(() => {
-            this.scrollToBottom();
-          });
-        }
-      }, responseTime);
-    },
-    scrollToBottom() {
-      if (this.$refs.messagesContainer) {
-        this.$refs.messagesContainer.scrollTop =
-          this.$refs.messagesContainer.scrollHeight;
-      }
-    },
-    formatMessageTime(date) {
-      if (!date) return "";
-
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-      return `${hours.toString().padStart(2, "0")}:${minutes
-        .toString()
-        .padStart(2, "0")}`;
-    },
-    formatTime(date) {
-      if (!date) return "";
-
-      const now = new Date();
-      const diff = now - date;
-
-      // Less than a minute
-      if (diff < 60 * 1000) {
-        return "Just now";
-      }
-
-      // Less than an hour
-      if (diff < 60 * 60 * 1000) {
-        const minutes = Math.floor(diff / (60 * 1000));
-        return `${minutes}m ago`;
-      }
-
-      // Less than a day
-      if (diff < 24 * 60 * 60 * 1000) {
-        const hours = Math.floor(diff / (60 * 60 * 1000));
-        return `${hours}h ago`;
-      }
-
-      // Less than a week
-      if (diff < 7 * 24 * 60 * 60 * 1000) {
-        const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-        return `${days}d ago`;
-      }
-
-      // Format as date
-      return date.toLocaleDateString();
-    },
+        text: "Hi Emma! Thanks for reaching out. We're looking for someone this Saturday from 6-10pm. Would you be available?",
+        time: new Date(Date.now() - 23 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "Yes, I'm free on Saturday evening. I'd be happy to help out with your children. How old are they?",
+        time: new Date(Date.now() - 22 * 60 * 60 * 1000),
+      },
+      {
+        sender: "client",
+        text: "Great! We have two kids - Emma is 5 and Noah is 3. They're pretty easy-going and usually in bed by 8pm.",
+        time: new Date(Date.now() - 20 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "I'm available this weekend if you still need a sitter!",
+        time: new Date(Date.now() - 15 * 60 * 1000),
+      },
+    ],
   },
-  mounted() {
-    // Select the first conversation by default
-    if (this.conversations.length > 0) {
-      this.selectConversation(this.conversations[0]);
+  {
+    id: 2,
+    name: "Sophia Martinez",
+    avatar: "https://randomuser.me/api/portraits/women/44.jpg",
+    lastMessage:
+      "The kids had a great time today! We made cookies and finished the science project.",
+    lastMessageTime: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
+    unread: false,
+    online: false,
+    lastSeen: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+    messages: [
+      {
+        sender: "nanny",
+        text: "Good morning! Just confirming our appointment for today at 2pm.",
+        time: new Date(Date.now() - 8 * 60 * 60 * 1000),
+      },
+      {
+        sender: "client",
+        text: "Good morning Sophia! Yes, 2pm works perfectly. The kids are excited to see you again.",
+        time: new Date(Date.now() - 7.5 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "Great! I've planned some fun activities for them. See you soon!",
+        time: new Date(Date.now() - 7 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "The kids had a great time today! We made cookies and finished the science project.",
+        time: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      },
+    ],
+  },
+  {
+    id: 3,
+    name: "Michael Wilson",
+    avatar: "https://randomuser.me/api/portraits/men/32.jpg",
+    lastMessage: "I can start next Monday. Would 9am work for you?",
+    lastMessageTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+    unread: false,
+    online: true,
+    lastSeen: null,
+    messages: [
+      {
+        sender: "client",
+        text: "Hi Michael, I'm interested in hiring you for regular weekday care for my son. Are you available for full-time work?",
+        time: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "Hello! Yes, I'm currently looking for a full-time position. I'd be happy to discuss details about your needs.",
+        time: new Date(Date.now() - 2.5 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "client",
+        text: "Great! We need someone Monday through Friday, 9am-5pm. When would you be able to start?",
+        time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "I can start next Monday. Would 9am work for you?",
+        time: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      },
+    ],
+  },
+  {
+    id: 4,
+    name: "Olivia Taylor",
+    avatar: "https://randomuser.me/api/portraits/women/67.jpg",
+    lastMessage:
+      "Thank you for the opportunity, but I've accepted another position. Best of luck finding a great nanny!",
+    lastMessageTime: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+    unread: false,
+    online: false,
+    lastSeen: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    messages: [
+      {
+        sender: "client",
+        text: "Hi Olivia, I saw your profile and I'm impressed with your experience with infants. We have a 6-month-old and are looking for part-time help.",
+        time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "Thank you for reaching out! I love working with infants. Could you tell me more about the schedule you're looking for?",
+        time: new Date(Date.now() - 6.5 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "client",
+        text: "We're looking for help on Tuesdays and Thursdays, from 10am to 4pm. Would that work with your schedule?",
+        time: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+      },
+      {
+        sender: "nanny",
+        text: "Thank you for the opportunity, but I've accepted another position. Best of luck finding a great nanny!",
+        time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      },
+    ],
+  },
+]);
+
+// Computed properties
+const filteredConversations = computed(() => {
+  const chats =
+    conversations.value.length > 0
+      ? conversations.value
+      : mockConversations.value;
+
+  console.log("Available chats:", chats);
+  console.log("Store chats:", conversations.value);
+  console.log("Mock chats:", mockConversations.value);
+
+  if (!searchQuery.value) return chats;
+
+  const query = searchQuery.value.toLowerCase();
+  return chats.filter(
+    (conversation) =>
+      conversation.name.toLowerCase().includes(query) ||
+      conversation.lastMessage.toLowerCase().includes(query)
+  );
+});
+
+// Template refs
+const messagesContainer = ref(null);
+
+// Methods
+function selectConversation(conversation) {
+  console.log("selectConversation called with:", conversation);
+
+  // Leave previous room if exists
+  if (selectedConversation.value) {
+    console.log("Leaving previous room:", selectedConversation.value.id);
+    leaveRoom(selectedConversation.value.id);
+  }
+
+  selectedConversation.value = conversation;
+  console.log("Selected conversation set to:", selectedConversation.value);
+  messageStore.setCurrentRoom(conversation.id);
+
+  // Mark as read when selected
+  if (conversation.unread) {
+    conversation.unread = false;
+    // Mark messages as read
+    const unreadMessages = conversation.messages.filter((msg) => !msg.readBy);
+    if (unreadMessages.length > 0) {
+      // markMessagesAsRead(
+      //   conversation.id,
+      //   unreadMessages.map((msg) => msg.id)
+      // );
     }
-  },
-};
+  }
+
+  // Join new room
+  // try {
+  //   joinRoom(conversation.id);
+  //   console.log("Joined room:", conversation.id);
+  // } catch (error) {
+  //   console.error("Error joining room:", error);
+  // }
+
+  // Get user status
+  const otherUserId = conversation.parent?.id || conversation.nanny?.id;
+  if (otherUserId) {
+    // try {
+    //   getUserStatus(otherUserId);
+    //   console.log("Getting user status for:", otherUserId);
+    // } catch (error) {
+    //   console.error("Error getting user status:", error);
+    // }
+  }
+
+  // Scroll to bottom of messages
+  nextTick(() => {
+    scrollToBottom();
+  });
+}
+
+function submitMessage() {
+  if (!newMessage.value.trim() || !selectedConversation.value) return;
+
+  const messageText = newMessage.value.trim();
+
+  // Send via Socket.IO
+  sendSocketMessage(selectedConversation.value.id, messageText);
+
+  // Stop typing indicator
+  sendTypingIndicator(selectedConversation.value.id, false);
+  isTyping.value = false;
+
+  // Clear input
+  newMessage.value = "";
+
+  // Scroll to bottom
+  nextTick(() => {
+    scrollToBottom();
+  });
+}
+
+// Handle typing indicator
+function handleTyping() {
+  if (!selectedConversation.value) return;
+
+  // Send typing indicator
+  sendTypingIndicator(selectedConversation.value.id, true);
+  isTyping.value = true;
+
+  // Clear existing timeout
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value);
+  }
+
+  // Set timeout to stop typing indicator
+  typingTimeout.value = setTimeout(() => {
+    sendTypingIndicator(selectedConversation.value.id, false);
+    isTyping.value = false;
+  }, 1000);
+}
+
+function scrollToBottom() {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+  }
+}
+
+function formatMessageTime(date) {
+  if (!date) return "";
+
+  // Handle both Date objects and date strings
+  let dateObj;
+  if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === "string") {
+    dateObj = new Date(date);
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      return "";
+    }
+  } else {
+    return "";
+  }
+
+  const hours = dateObj.getHours();
+  const minutes = dateObj.getMinutes();
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function formatTime(date) {
+  if (!date) return "";
+
+  // Handle both Date objects and date strings
+  let dateObj;
+  if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === "string") {
+    dateObj = new Date(date);
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      return "";
+    }
+  } else {
+    return "";
+  }
+
+  const now = new Date();
+  const diff = now - dateObj;
+
+  // Less than a minute
+  if (diff < 60 * 1000) {
+    return "Just now";
+  }
+
+  // Less than an hour
+  if (diff < 60 * 60 * 1000) {
+    const minutes = Math.floor(diff / (60 * 1000));
+    return `${minutes}m ago`;
+  }
+
+  // Less than a day
+  if (diff < 24 * 60 * 60 * 1000) {
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    return `${hours}h ago`;
+  }
+
+  // Less than a week
+  if (diff < 7 * 24 * 60 * 60 * 1000) {
+    const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    return `${days}d ago`;
+  }
+
+  // Format as date
+  return date.toLocaleDateString();
+}
+
+// Socket event handlers
+function setupSocketListeners() {
+  socket.on("message-received", (message) => {
+    messageStore.addMessage(message);
+    nextTick(() => {
+      scrollToBottom();
+    });
+  });
+
+  socket.on("user-status", (data) => {
+    messageStore.updateUserStatus(data.userId, data.isOnline, data.lastSeen);
+  });
+
+  socket.on("typing", (data) => {
+    messageStore.setTypingUser(data.userId, data.userType, data.isTyping);
+  });
+
+  socket.on("message-read", (data) => {
+    messageStore.updateMessageReadStatus(data.messageIds, data.readBy);
+  });
+}
+
+// Lifecycle hooks
+onMounted(async () => {
+  // Setup socket listeners
+  // setupSocketListeners();
+
+  // Fetch chats from store
+  await messageStore.fetchChats();
+
+  // Select the first conversation by default
+  const chats =
+    conversations.value.length > 0
+      ? conversations.value
+      : mockConversations.value;
+  if (chats.length > 0) {
+    selectConversation(chats[0]);
+  }
+});
+
+onUnmounted(() => {
+  // Leave current room
+  if (selectedConversation.value) {
+    leaveRoom(selectedConversation.value.id);
+  }
+
+  // Clear typing timeout
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value);
+  }
+
+  // Remove socket listeners
+  socket.off("message-received");
+  socket.off("user-status");
+  socket.off("typing");
+  socket.off("message-read");
+});
 </script>
